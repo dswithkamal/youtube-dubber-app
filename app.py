@@ -6,8 +6,9 @@ import os
 import uuid
 import tempfile
 import traceback
+import ffmpeg  # NEW import
 
-# App config
+# Page config
 st.set_page_config(page_title="YouTube Dubber", layout="centered")
 st.title("🎧 YouTube Subtitle & Dubbing App")
 
@@ -50,7 +51,7 @@ def main():
         temp_files = []
 
         try:
-            # Step 1: Download audio and convert to mp3 manually
+            # Step 1: Download audio
             with st.spinner("⏳ Downloading and converting audio..."):
                 raw_audio_path = os.path.join(temp_dir, f"{session_id}.webm")
                 mp3_path = os.path.join(temp_dir, f"{session_id}.mp3")
@@ -67,10 +68,16 @@ def main():
                 if not os.path.exists(raw_audio_path):
                     raise Exception("Download failed. No audio file saved.")
 
-                # Convert to mp3 using system ffmpeg
-                result = os.system(f"ffmpeg -y -i \"{raw_audio_path}\" -vn -ar 44100 -ac 2 -b:a 192k \"{mp3_path}\"")
-                if result != 0 or not os.path.exists(mp3_path):
-                    raise Exception("ffmpeg conversion failed")
+                # Convert using ffmpeg-python
+                try:
+                    (
+                        ffmpeg
+                        .input(raw_audio_path)
+                        .output(mp3_path, format='mp3', acodec='libmp3lame', ac=2, ar='44100')
+                        .run(overwrite_output=True, quiet=True)
+                    )
+                except ffmpeg.Error as e:
+                    raise Exception("ffmpeg-python conversion failed") from e
 
                 audio_path = mp3_path
                 temp_files.extend([raw_audio_path, mp3_path])
@@ -83,7 +90,7 @@ def main():
                 transcript = result["text"]
                 st.success("✅ Transcription complete")
 
-            # Step 3: Create SRT file
+            # Step 3: Create SRT
             with st.spinner("📝 Creating subtitle file..."):
                 srt_path = os.path.join(temp_dir, f"{session_id}.srt")
                 with open(srt_path, "w", encoding="utf-8") as f:
@@ -94,7 +101,7 @@ def main():
                 temp_files.append(srt_path)
                 st.success("✅ Subtitles created")
 
-            # Step 4: Generate dubbed audio
+            # Step 4: Dubbing
             with st.spinner(f"🔊 Dubbing into {language_name}..."):
                 dubbed_path = os.path.join(temp_dir, f"{session_id}_dubbed.mp3")
                 tts = gTTS(text=transcript, lang=LANGUAGES[language_name])
@@ -102,7 +109,7 @@ def main():
                 temp_files.append(dubbed_path)
                 st.success("✅ Dubbed audio created")
 
-            # Step 5: Show results
+            # Step 5: Display Results
             st.success("🎉 Done! Download or preview your results below.")
             col1, col2 = st.columns(2)
             with col1:
