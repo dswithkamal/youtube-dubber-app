@@ -5,37 +5,57 @@ from gtts import gTTS
 import os
 import uuid
 
-st.set_page_config(page_title="YouTube Dubber", layout="centered")
+# Mapping full language names to language codes for gTTS
+LANGUAGES = {
+    "English": "en",
+    "Hindi": "hi",
+    "Telugu": "te",
+    "Russian": "ru",
+    "Spanish": "es",
+    "French": "fr",
+    "German": "de",
+    "Tamil": "ta",
+    "Bengali": "bn",
+    "Malayalam": "ml",
+    "Urdu": "ur"
+}
 
+st.set_page_config(page_title="YouTube Dubber", layout="centered")
 st.title("🎧 YouTube Subtitle & Dubbing App")
 
 youtube_url = st.text_input("📺 Paste YouTube Video Link")
 
-language = st.selectbox("🌐 Choose Language for Dubbing", ["hi", "en", "fr", "es", "de", "ta", "bn", "te", "ml", "ur"])
+language_name = st.selectbox("🌐 Choose Language for Dubbing", list(LANGUAGES.keys()))
+language = LANGUAGES[language_name]
 
 if st.button("🔁 Generate Subtitles & Dubbed Audio"):
     if not youtube_url:
         st.warning("Please paste a YouTube video link.")
         st.stop()
 
-    with st.spinner("⏳ Downloading video..."):
+    with st.spinner("⏳ Downloading audio from YouTube..."):
         video_id = str(uuid.uuid4())
-        audio_path = f"{video_id}.mp3"
+        audio_path = f"{video_id}.m4a"
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': audio_path,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-            }],
             'quiet': True
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([youtube_url])
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([youtube_url])
+        except Exception as e:
+            st.error("❌ Failed to download audio. Please check the video URL.")
+            st.stop()
 
-    with st.spinner("🔍 Transcribing with Whisper..."):
+    with st.spinner("🧠 Transcribing audio using Whisper..."):
         model = whisper.load_model("base")
-        result = model.transcribe(audio_path, fp16=False)
+        try:
+            result = model.transcribe(audio_path, fp16=False)
+        except Exception as e:
+            st.error("❌ Whisper transcription failed. Try a different video.")
+            st.stop()
+
         transcript = result["text"]
 
         srt_path = f"{video_id}.srt"
@@ -45,10 +65,14 @@ if st.button("🔁 Generate Subtitles & Dubbed Audio"):
                 f.write(f"{segment['start']:.2f} --> {segment['end']:.2f}\n")
                 f.write(f"{segment['text']}\n\n")
 
-    with st.spinner("🎙️ Generating dubbed audio..."):
-        tts = gTTS(transcript, lang=language)
-        dubbed_audio = f"{video_id}_dub.mp3"
-        tts.save(dubbed_audio)
+    with st.spinner(f"🔊 Generating dubbed audio in {language_name}..."):
+        try:
+            tts = gTTS(transcript, lang=language)
+            dubbed_audio = f"{video_id}_dub.mp3"
+            tts.save(dubbed_audio)
+        except Exception as e:
+            st.error(f"❌ Text-to-speech failed for {language_name}.")
+            st.stop()
 
     st.success("✅ Done!")
 
@@ -58,7 +82,7 @@ if st.button("🔁 Generate Subtitles & Dubbed Audio"):
     with open(dubbed_audio, "rb") as f:
         st.download_button("🎧 Download Dubbed Audio (MP3)", f, file_name="dubbed_audio.mp3")
 
-    # Clean up
+    # Cleanup temporary files
     os.remove(audio_path)
     os.remove(srt_path)
     os.remove(dubbed_audio)
