@@ -2,7 +2,6 @@ import streamlit as st
 import yt_dlp
 import whisper
 from gtts import gTTS
-from pydub import AudioSegment
 import os
 import uuid
 
@@ -59,6 +58,7 @@ if st.button("🔁 Generate Subtitles & Dubbed Audio"):
     with open(dubbed_audio, "rb") as f:
         st.download_button("🎧 Download Dubbed Audio (MP3)", f, file_name="dubbed_audio.mp3")
 
+    # Clean up
     os.remove(audio_path)
     os.remove(srt_path)
     os.remove(dubbed_audio)
