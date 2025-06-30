@@ -3,4 +3,3 @@ yt-dlp
 openai-whisper
 torch
 gtts
-pydub
