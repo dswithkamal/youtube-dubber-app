@@ -1,12 +1,21 @@
+# Core packages
 streamlit==1.32.0
-yt-dlp==2023.11.16  # Pinned to stable version
-openai-whisper==20231117  # Newer version with bug fixes
-torch==2.1.2  # Matches Whisper's requirements
-gTTS==2.4.0  # Correct case (gtts is incorrect)
-ffmpeg-python==0.2.0  # For programmatic ffmpeg control
+yt-dlp==2023.11.16
+openai-whisper==20231117
+gTTS==2.4.0
 
-# Additional recommended dependencies
-pydub==0.25.1  # Better audio handling
-python-dotenv==1.0.0  # For environment variables
-numpy==1.26.2  # Required by Whisper
-tqdm==4.66.1  # Progress bars
+# PyTorch (CPU version - choose ONE)
+torch==2.1.2
+# OR for GPU support (CUDA 11.8):
+# torch==2.1.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
+
+# Audio processing
+ffmpeg-python==0.2.0
+pydub==0.25.1
+
+# Whisper dependencies
+numpy==1.26.2
+tqdm==4.66.1
+
+# System utilities
+python-dotenv==1.0.0
