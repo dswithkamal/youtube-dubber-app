@@ -6,9 +6,10 @@ import os
 import uuid
 import subprocess
 from pydub import AudioSegment
+import tempfile
 
 # Configure app
-st.set_page_config(page_title="YouTube Dubber Pro", layout="centered")
+st.set_page_config(page_title="YouTube Dubber", layout="centered")
 st.title("🎧 YouTube Subtitle & Dubbing App")
 
 # Language mapping
@@ -22,17 +23,20 @@ LANGUAGES = {
     "Russian": "ru",
     "Chinese": "zh",
     "Arabic": "ar",
-    "Portuguese": "pt"
+    "Portuguese": "pt",
+    "Telugu": "te",
+    "Tamil": "ta",
+    "Bengali": "bn"
 }
 
-def clean_temp_files(*files):
+def clean_temp_files(files):
     """Safely remove temporary files"""
     for file in files:
         try:
             if file and os.path.exists(file):
                 os.remove(file)
         except Exception as e:
-            st.warning(f"Couldn't remove {file}: {str(e)}")
+            st.warning(f"Couldn't remove temporary file: {str(e)}")
 
 def main():
     youtube_url = st.text_input("📺 Paste YouTube Video URL", placeholder="https://www.youtube.com/watch?v=...")
@@ -42,76 +46,128 @@ def main():
         if not youtube_url:
             st.warning("Please enter a YouTube URL")
             return
-
-        with st.spinner("⏳ Processing your video..."):
+            
+        # Create temporary workspace
+        temp_dir = tempfile.mkdtemp()
+        temp_files = []
+        
+        try:
+            # Generate unique session ID
+            session_id = str(uuid.uuid4())
+            
+            # 1. Download audio
+            with st.spinner("⏳ Downloading video audio..."):
+                try:
+                    ydl_opts = {
+                        'format': 'bestaudio/best',
+                        'outtmpl': os.path.join(temp_dir, f'{session_id}_original'),
+                        'postprocessors': [{
+                            'key': 'FFmpegExtractAudio',
+                            'preferredcodec': 'mp3',
+                        }],
+                        'quiet': True
+                    }
+                    
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([youtube_url])
+                    
+                    original_audio = os.path.join(temp_dir, f'{session_id}_original.mp3')
+                    temp_files.append(original_audio)
+                    
+                    if not os.path.exists(original_audio):
+                        raise Exception("Audio download failed")
+                except Exception as e:
+                    st.error(f"❌ Download error: {str(e)}")
+                    return
+            
+            # 2. Transcribe with Whisper
+            with st.spinner("🧠 Transcribing audio..."):
+                try:
+                    model = whisper.load_model("base")
+                    result = model.transcribe(original_audio)
+                    transcript = result["text"]
+                except Exception as e:
+                    st.error(f"❌ Transcription failed: {str(e)}")
+                    return
+            
+            # 3. Generate SRT subtitles
+            with st.spinner("📝 Creating subtitles..."):
+                try:
+                    srt_file = os.path.join(temp_dir, f'{session_id}_subtitles.srt')
+                    with open(srt_file, 'w', encoding='utf-8') as f:
+                        for i, segment in enumerate(result["segments"]):
+                            f.write(f"{i+1}\n")
+                            f.write(f"{segment['start']:.3f} --> {segment['end']:.3f}\n")
+                            f.write(f"{segment['text'].strip()}\n\n")
+                    temp_files.append(srt_file)
+                except Exception as e:
+                    st.error(f"❌ Subtitle creation failed: {str(e)}")
+                    return
+            
+            # 4. Generate dubbed audio
+            with st.spinner(f"🔊 Creating {language_name} dubbed audio..."):
+                try:
+                    # Split text into chunks
+                    max_chars = 4000  # gTTS character limit
+                    chunks = [transcript[i:i+max_chars] for i in range(0, len(transcript), max_chars)]
+                    audio_chunks = []
+                    
+                    for i, chunk in enumerate(chunks):
+                        chunk_file = os.path.join(temp_dir, f'{session_id}_chunk_{i}.mp3')
+                        tts = gTTS(chunk, lang=LANGUAGES[language_name])
+                        tts.save(chunk_file)
+                        audio_chunks.append(chunk_file)
+                        temp_files.append(chunk_file)
+                    
+                    # Combine chunks
+                    dubbed_audio = os.path.join(temp_dir, f'{session_id}_dubbed.mp3')
+                    
+                    if len(audio_chunks) > 1:
+                        combined = AudioSegment.empty()
+                        for chunk in audio_chunks:
+                            combined += AudioSegment.from_mp3(chunk)
+                        combined.export(dubbed_audio, format="mp3")
+                    else:
+                        os.rename(audio_chunks[0], dubbed_audio)
+                    
+                    temp_files.append(dubbed_audio)
+                except Exception as e:
+                    st.error(f"❌ Dubbing failed: {str(e)}")
+                    return
+            
+            # 5. Display results
+            st.success("✅ Processing complete!")
+            
+            # Create download buttons
+            col1, col2 = st.columns(2)
+            with col1:
+                with open(srt_file, 'rb') as f:
+                    st.download_button(
+                        "📄 Download Subtitles (SRT)",
+                        f,
+                        file_name="subtitles.srt"
+                    )
+            
+            with col2:
+                with open(dubbed_audio, 'rb') as f:
+                    st.download_button(
+                        "🎧 Download Dubbed Audio",
+                        f,
+                        file_name="dubbed_audio.mp3"
+                    )
+            
+            # Add previews
+            st.subheader("Preview")
+            st.audio(dubbed_audio)
+            st.text_area("Generated Transcript", transcript, height=200)
+            
+        finally:
+            # Clean up temporary files
+            clean_temp_files(temp_files)
             try:
-                # Generate unique IDs for files
-                session_id = str(uuid.uuid4())
-                temp_files = []
-                
-                # 1. Download audio
-                ydl_opts = {
-                    'format': 'bestaudio/best',
-                    'outtmpl': f'{session_id}_original',
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'mp3',
-                    }],
-                    'quiet': True
-                }
-                
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([youtube_url])
-                original_audio = f'{session_id}_original.mp3'
-                temp_files.append(original_audio)
-                
-                # 2. Transcribe with Whisper
-                model = whisper.load_model("base")
-                result = model.transcribe(original_audio)
-                transcript = result["text"]
-                
-                # 3. Generate SRT
-                srt_file = f'{session_id}_subtitles.srt'
-                with open(srt_file, 'w', encoding='utf-8') as f:
-                    for i, segment in enumerate(result["segments"]):
-                        f.write(f"{i+1}\n")
-                        f.write(f"{segment['start']:.3f} --> {segment['end']:.3f}\n")
-                        f.write(f"{segment['text'].strip()}\n\n")
-                temp_files.append(srt_file)
-                
-                # 4. Generate dubbed audio
-                tts = gTTS(transcript, lang=LANGUAGES[language_name])
-                dubbed_audio = f'{session_id}_dubbed.mp3'
-                tts.save(dubbed_audio)
-                temp_files.append(dubbed_audio)
-                
-                # 5. Display results
-                st.success("✅ Processing complete!")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    with open(srt_file, 'rb') as f:
-                        st.download_button(
-                            "📄 Download Subtitles",
-                            f,
-                            file_name="subtitles.srt"
-                        )
-                
-                with col2:
-                    with open(dubbed_audio, 'rb') as f:
-                        st.download_button(
-                            "🎧 Download Dubbed Audio",
-                            f,
-                            file_name="dubbed_audio.mp3"
-                        )
-                
-                st.audio(dubbed_audio)
-                st.text_area("Generated Transcript", transcript, height=200)
-                
-            except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
-            finally:
-                clean_temp_files(*temp_files)
+                os.rmdir(temp_dir)
+            except:
+                pass
 
 if __name__ == "__main__":
     main()
