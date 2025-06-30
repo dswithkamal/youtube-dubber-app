@@ -4,7 +4,6 @@ import whisper
 from gtts import gTTS
 import os
 import uuid
-import subprocess
 from pydub import AudioSegment
 import tempfile
 
@@ -35,8 +34,8 @@ def clean_temp_files(files):
         try:
             if file and os.path.exists(file):
                 os.remove(file)
-        except Exception as e:
-            st.warning(f"Couldn't remove temporary file: {str(e)}")
+        except:
+            pass
 
 def main():
     youtube_url = st.text_input("📺 Paste YouTube Video URL", placeholder="https://www.youtube.com/watch?v=...")
@@ -60,7 +59,7 @@ def main():
                 try:
                     ydl_opts = {
                         'format': 'bestaudio/best',
-                        'outtmpl': os.path.join(temp_dir, f'{session_id}_original'),
+                        'outtmpl': os.path.join(temp_dir, f'{session_id}_original.%(ext)s'),
                         'postprocessors': [{
                             'key': 'FFmpegExtractAudio',
                             'preferredcodec': 'mp3',
@@ -69,13 +68,9 @@ def main():
                     }
                     
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([youtube_url])
-                    
-                    original_audio = os.path.join(temp_dir, f'{session_id}_original.mp3')
-                    temp_files.append(original_audio)
-                    
-                    if not os.path.exists(original_audio):
-                        raise Exception("Audio download failed")
+                        info_dict = ydl.extract_info(youtube_url, download=True)
+                        original_audio = ydl.prepare_filename(info_dict).replace('.webm', '.mp3').replace('.m4a', '.mp3')
+                        temp_files.append(original_audio)
                 except Exception as e:
                     st.error(f"❌ Download error: {str(e)}")
                     return
