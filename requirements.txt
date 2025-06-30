@@ -3,3 +3,4 @@ yt-dlp
 openai-whisper
 torch
 gtts
+ffmpeg-python
