@@ -4,4 +4,3 @@ openai-whisper==20231117
 gTTS==2.4.0
 torch==2.1.2
 numpy==1.26.2
-ffmpeg-python==0.2.0
