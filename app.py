@@ -81,3 +81,19 @@ if st.button("🔁 Generate Subtitles & Dubbed Audio"):
             dubbed_audio = f"{video_id}_dub.mp3"
             tts.save(dubbed_audio)
         except Exception as e:
+            st.error(f"❌ Text-to-speech failed for {language_name}.")
+            st.exception(e)
+            st.stop()
+
+    st.success("✅ Done! Download your files below:")
+
+    with open(srt_path, "rb") as f:
+        st.download_button("📄 Download Subtitles (SRT)", f, file_name="subtitles.srt")
+
+    with open(dubbed_audio, "rb") as f:
+        st.download_button("🎧 Download Dubbed Audio (MP3)", f, file_name="dubbed_audio.mp3")
+
+    # Clean up temporary files
+    os.remove(audio_path)
+    os.remove(srt_path)
+    os.remove(dubbed_audio)
