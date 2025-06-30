@@ -1,21 +1,10 @@
-# Core packages
 streamlit==1.32.0
 yt-dlp==2023.11.16
 openai-whisper==20231117
 gTTS==2.4.0
-
-# PyTorch (CPU version - choose ONE)
 torch==2.1.2
-# OR for GPU support (CUDA 11.8):
-# torch==2.1.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
-
-# Audio processing
-ffmpeg-python==0.2.0
-pydub==0.25.1
-
-# Whisper dependencies
 numpy==1.26.2
+pydub==0.25.1
+ffmpeg-python==0.2.0
 tqdm==4.66.1
-
-# System utilities
 python-dotenv==1.0.0
