@@ -4,8 +4,8 @@ import whisper
 from gtts import gTTS
 import os
 import uuid
-from pydub import AudioSegment
 import tempfile
+import subprocess
 
 # Configure app
 st.set_page_config(page_title="YouTube Dubber", layout="centered")
@@ -59,7 +59,7 @@ def main():
                 try:
                     ydl_opts = {
                         'format': 'bestaudio/best',
-                        'outtmpl': os.path.join(temp_dir, f'{session_id}_original.%(ext)s'),
+                        'outtmpl': os.path.join(temp_dir, f'{session_id}.%(ext)s'),
                         'postprocessors': [{
                             'key': 'FFmpegExtractAudio',
                             'preferredcodec': 'mp3',
@@ -68,8 +68,8 @@ def main():
                     }
                     
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        info_dict = ydl.extract_info(youtube_url, download=True)
-                        original_audio = ydl.prepare_filename(info_dict).replace('.webm', '.mp3').replace('.m4a', '.mp3')
+                        info = ydl.extract_info(youtube_url, download=True)
+                        original_audio = ydl.prepare_filename(info).replace('.webm', '.mp3').replace('.m4a', '.mp3')
                         temp_files.append(original_audio)
                 except Exception as e:
                     st.error(f"❌ Download error: {str(e)}")
@@ -102,29 +102,12 @@ def main():
             # 4. Generate dubbed audio
             with st.spinner(f"🔊 Creating {language_name} dubbed audio..."):
                 try:
-                    # Split text into chunks
-                    max_chars = 4000  # gTTS character limit
-                    chunks = [transcript[i:i+max_chars] for i in range(0, len(transcript), max_chars)]
-                    audio_chunks = []
-                    
-                    for i, chunk in enumerate(chunks):
-                        chunk_file = os.path.join(temp_dir, f'{session_id}_chunk_{i}.mp3')
-                        tts = gTTS(chunk, lang=LANGUAGES[language_name])
-                        tts.save(chunk_file)
-                        audio_chunks.append(chunk_file)
-                        temp_files.append(chunk_file)
-                    
-                    # Combine chunks
+                    # Use system ffmpeg for audio concatenation
                     dubbed_audio = os.path.join(temp_dir, f'{session_id}_dubbed.mp3')
                     
-                    if len(audio_chunks) > 1:
-                        combined = AudioSegment.empty()
-                        for chunk in audio_chunks:
-                            combined += AudioSegment.from_mp3(chunk)
-                        combined.export(dubbed_audio, format="mp3")
-                    else:
-                        os.rename(audio_chunks[0], dubbed_audio)
-                    
+                    # Directly generate audio without splitting
+                    tts = gTTS(transcript, lang=LANGUAGES[language_name])
+                    tts.save(dubbed_audio)
                     temp_files.append(dubbed_audio)
                 except Exception as e:
                     st.error(f"❌ Dubbing failed: {str(e)}")
